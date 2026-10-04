@@ -1,0 +1,897 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Candy Obby</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Figtree:wght@400;500&display=swap">
+<style>
+/* Layout: a full-screen 3D view with a thin HUD on top (stats left, buttons right), touch controls at the bottom, and two centered cards (start, shop). */
+:root {
+  --pink: #ff8ac9;
+  --pink-deep: #c93a8a;
+  --ink: #4a2350;
+  --cream: #fff4fa;
+  --mint: #3fae72;
+  --lemon: #ffdc78;
+  --sky: #82dcff;
+  --glass: rgba(255, 255, 255, 0.88);
+  --font-display: "Fredoka", "Trebuchet MS", system-ui, sans-serif;
+  --font-body: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; overflow: hidden; background: #ffc9e6; color: var(--ink); font-family: var(--font-body); }
+#app {
+  position: relative; width: 100%; height: 100%; overflow: hidden; outline: none;
+  background: linear-gradient(180deg, #b9a6ff 0%, #ffb3dc 55%, #ffe3b8 100%);
+  user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
+}
+canvas#view { display: block; width: 100%; height: 100%; touch-action: none; }
+
+.hud { position: absolute; top: 12px; left: 16px; right: 16px; display: flex; justify-content: space-between; gap: 10px; pointer-events: none; flex-wrap: wrap; }
+.group { display: flex; gap: 8px; flex-wrap: wrap; }
+.pill {
+  font-family: var(--font-display); font-weight: 600; font-size: 1rem; line-height: 1;
+  background: var(--glass); color: var(--ink); padding: 9px 14px; border-radius: 999px; border: 0;
+  box-shadow: 0 2px 0 rgba(120, 40, 110, 0.18); white-space: nowrap;
+}
+.pill b { color: var(--pink-deep); font-weight: 600; }
+button.pill { pointer-events: auto; cursor: pointer; }
+button.pill:hover { background: #fff; }
+button:focus-visible { outline: 3px solid var(--pink-deep); outline-offset: 2px; }
+
+#toast {
+  position: absolute; top: 64px; left: 50%; transform: translateX(-50%); max-width: calc(100% - 32px);
+  font-family: var(--font-display); font-weight: 600; font-size: 1.1rem; text-align: center;
+  background: var(--pink-deep); color: #fff; padding: 10px 18px; border-radius: 14px; pointer-events: none;
+}
+#hint {
+  position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); width: max-content; max-width: calc(100% - 32px);
+  font-size: 0.85rem; text-align: center; background: var(--glass); padding: 7px 14px; border-radius: 999px; pointer-events: none;
+}
+#flash { position: absolute; inset: 0; background: #ff4d97; opacity: 0; pointer-events: none; transition: opacity 0.35s; }
+#flash.on { opacity: 0.45; transition: none; }
+
+/* touch controls */
+#joyZone { position: absolute; left: 0; bottom: 0; width: 50%; height: 60%; touch-action: none; }
+#joyBase { position: absolute; width: 112px; height: 112px; margin: -56px 0 0 -56px; border-radius: 50%; background: rgba(255,255,255,0.35); border: 3px solid rgba(255,255,255,0.7); pointer-events: none; }
+#joyKnob { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px; border-radius: 50%; background: var(--pink); box-shadow: 0 2px 0 rgba(120,40,110,.3); }
+#jumpBtn {
+  position: absolute; right: 22px; bottom: 34px; width: 88px; height: 88px; border-radius: 50%; border: 0;
+  background: var(--pink); color: #fff; font-family: var(--font-display); font-weight: 600; font-size: 1.1rem;
+  box-shadow: 0 4px 0 var(--pink-deep); touch-action: none;
+}
+#jumpBtn:active { transform: translateY(2px); box-shadow: 0 2px 0 var(--pink-deep); }
+
+/* cards */
+.overlay { position: absolute; inset: 0; display: grid; place-items: center; padding: 16px; background: rgba(74, 35, 80, 0.35); }
+.card { width: min(480px, 100%); max-height: 100%; overflow: auto; background: var(--cream); border-radius: 20px; padding: 24px; border: 4px solid var(--pink); display: flex; flex-direction: column; gap: 16px; }
+.card h1, .card h2 { font-family: var(--font-display); font-weight: 600; margin: 0; line-height: 1.1; }
+.card h1 { font-size: clamp(2.2rem, 9vw, 3rem); }
+.card h2 { font-size: 1.7rem; }
+.card p { margin: 0; line-height: 1.5; }
+.keys { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; font-size: 0.95rem; }
+.keys dt { font-family: var(--font-display); font-weight: 600; color: var(--pink-deep); }
+.keys dd { margin: 0; }
+.go {
+  font-family: var(--font-display); font-weight: 600; font-size: 1.3rem; color: #fff; background: var(--pink-deep);
+  border: 0; border-radius: 14px; padding: 14px 20px; cursor: pointer; box-shadow: 0 4px 0 #8f2563;
+}
+.go:active { transform: translateY(2px); box-shadow: 0 2px 0 #8f2563; }
+.shophead { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.x { font-family: var(--font-display); font-weight: 600; font-size: 1.1rem; width: 40px; height: 40px; border-radius: 10px; border: 0; background: #ff6e86; color: #fff; cursor: pointer; }
+#items { display: grid; gap: 10px; }
+.item { display: grid; grid-template-columns: 44px 1fr auto; gap: 12px; align-items: center; background: #fff; border-radius: 14px; padding: 10px 12px; }
+.sw { width: 44px; height: 44px; border-radius: 10px; }
+.item b { font-family: var(--font-display); font-weight: 600; font-size: 1.05rem; display: block; }
+.item span { font-size: 0.85rem; color: #7a5a80; }
+.buy { font-family: var(--font-display); font-weight: 600; font-size: 0.95rem; min-width: 96px; padding: 10px 12px; border-radius: 10px; border: 0; color: #fff; background: var(--pink-deep); cursor: pointer; }
+.buy.equip { background: var(--mint); }
+.buy.off { background: #b9a9bd; cursor: default; }
+#loading { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px; font-family: var(--font-display); font-size: 1.3rem; }
+@media (prefers-reduced-motion: reduce) { #flash { transition: none; } }
+</style>
+
+<div id="app" tabindex="0">
+  <canvas id="view"></canvas>
+  <div id="loading">Baking the candy course...</div>
+
+  <div class="hud">
+    <div class="group">
+      <div class="pill">Stage <b id="hStage">0</b> / 5</div>
+      <div class="pill">Coins <b id="hCoins">0</b></div>
+      <div class="pill">Wins <b id="hWins">0</b></div>
+    </div>
+    <div class="group">
+      <button class="pill" id="bShop" type="button">Shop</button>
+      <button class="pill" id="bReset" type="button">Respawn</button>
+      <button class="pill" id="bSound" type="button">Sound on</button>
+    </div>
+  </div>
+  <div id="toast" hidden></div>
+  <div id="hint">WASD or arrows to move · Space to jump · Drag to look · R to respawn</div>
+  <div id="flash"></div>
+
+  <div id="joyZone" hidden><div id="joyBase" hidden><div id="joyKnob"></div></div></div>
+  <button id="jumpBtn" type="button" hidden>JUMP</button>
+
+  <div class="overlay" id="start" hidden>
+    <div class="card">
+      <h1>Candy Obby</h1>
+      <p>Hop across floating candy platforms, grab coins, and reach the FINISH pad. Fall in the pink goo and you restart at your last checkpoint.</p>
+      <dl class="keys">
+        <dt>Move</dt><dd>WASD or arrow keys · left thumb on a phone</dd>
+        <dt>Jump</dt><dd>Space · the JUMP button on a phone</dd>
+        <dt>Look</dt><dd>Drag the mouse or your right thumb</dd>
+        <dt>Respawn</dt><dd>R or the Respawn button</dd>
+      </dl>
+      <button class="go" id="bPlay" type="button">Play</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="shop" hidden>
+    <div class="card">
+      <div class="shophead"><h2>Candy Shop</h2><button class="x" id="bClose" type="button" aria-label="Close shop">X</button></div>
+      <p>You have <b id="shopCoins">0</b> coins.</p>
+      <div id="items"></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var app = $('app');
+
+  if (!window.THREE) {
+    $('loading').textContent = 'The 3D engine did not load. Check your connection and reload.';
+    return;
+  }
+  var T = THREE;
+
+  /* ---------------- settings (same numbers as the Roblox version) ---------------- */
+  var PAD = 16, PLAT = 8, SPIN = 14, GAP = 5;
+  var WALK = 16, GRAV = 196, JUMP = 50, KILL_Y = -45;
+  var PW = 1.0, PH = 5.2, EPS = 1e-4;
+  var COIN_RESPAWN = 20, FINISH_REWARD = 50;
+  var RECIPES = [
+    ['static', 'static', 'static', 'static'],
+    ['static', 'moving', 'static', 'moving'],
+    ['static', 'fade', 'static', 'fade'],
+    ['moving', 'fade', 'moving', 'fade'],
+    ['fade', 'spin', 'moving', 'fade']
+  ];
+  var STAGES = RECIPES.length;
+  var COLORS = [0xff8ac9, 0x82dcff, 0xffdc78, 0xaaf096, 0xc8a0ff];
+  var SHOP = [
+    { id: 'TrailPink', name: 'Bubblegum Trail', price: 50, kind: 'Trail', desc: 'A pink sparkle line behind you.', color: '#ff8ac9' },
+    { id: 'TrailMint', name: 'Mint Trail', price: 100, kind: 'Trail', desc: 'Cool and fresh green trail.', color: '#78e69a' },
+    { id: 'TrailRainbow', name: 'Rainbow Trail', price: 250, kind: 'Trail', desc: 'All the candy colors at once.', color: '#ffdc78' },
+    { id: 'SpeedyShoes', name: 'Speedy Shoes', price: 300, kind: 'Perk', desc: 'Run a little faster. Always on.', color: '#82dcff' }
+  ];
+
+  /* ---------------- saved progress (this browser only) ---------------- */
+  var KEY = 'candyObbyV1';
+  var save = { coins: 0, wins: 0, stage: 0, owned: {}, trail: '' };
+  try {
+    var raw = localStorage.getItem(KEY);
+    if (raw) {
+      var s = JSON.parse(raw);
+      save.coins = Math.max(0, Math.floor(+s.coins || 0));
+      save.wins = Math.max(0, Math.floor(+s.wins || 0));
+      var st = Math.floor(+s.stage || 0);
+      save.stage = (st >= 0 && st < STAGES) ? st : 0;
+      SHOP.forEach(function (it) { if (s.owned && s.owned[it.id]) save.owned[it.id] = true; });
+      if (typeof s.trail === 'string' && save.owned[s.trail]) save.trail = s.trail;
+    }
+  } catch (e) { /* storage unavailable: play without saving */ }
+  function persist() { try { localStorage.setItem(KEY, JSON.stringify(save)); } catch (e) { /* ignore */ } }
+
+  /* ---------------- sound (starts after the first click) ---------------- */
+  var audio = null, soundOn = true;
+  function ensureAudio() {
+    if (audio || !(window.AudioContext || window.webkitAudioContext)) return;
+    try { audio = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { audio = null; }
+  }
+  function beep(f, d, type, vol, slide, delay) {
+    if (!audio || !soundOn) return;
+    try {
+      var t0 = audio.currentTime + (delay || 0);
+      var o = audio.createOscillator(), g = audio.createGain();
+      o.type = type || 'sine';
+      o.frequency.setValueAtTime(f, t0);
+      if (slide) o.frequency.exponentialRampToValueAtTime(slide, t0 + d);
+      g.gain.setValueAtTime(vol || 0.07, t0);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + d);
+      o.connect(g); g.connect(audio.destination);
+      o.start(t0); o.stop(t0 + d + 0.02);
+    } catch (e) { /* ignore */ }
+  }
+  var sfx = {
+    jump: function () { beep(330, 0.14, 'triangle', 0.06, 620); },
+    coin: function () { beep(880, 0.08, 'square', 0.04); beep(1320, 0.12, 'square', 0.04, null, 0.07); },
+    die: function () { beep(300, 0.4, 'sawtooth', 0.06, 70); },
+    check: function () { [523, 659, 784].forEach(function (f, i) { beep(f, 0.14, 'triangle', 0.07, null, i * 0.09); }); },
+    win: function () { [523, 659, 784, 1047, 784, 1047, 1319].forEach(function (f, i) { beep(f, 0.18, 'triangle', 0.07, null, i * 0.11); }); },
+    buy: function () { beep(660, 0.1, 'triangle', 0.07); beep(990, 0.18, 'triangle', 0.07, null, 0.09); }
+  };
+
+  /* ---------------- renderer, scene, camera ---------------- */
+  var canvas = $('view');
+  var renderer;
+  try {
+    renderer = new T.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+  } catch (e) {
+    $('loading').textContent = 'This browser could not start 3D graphics.';
+    return;
+  }
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  var scene = new T.Scene();
+  scene.fog = new T.Fog(0xffc2e2, 150, 520);
+  var camera = new T.PerspectiveCamera(60, 1, 0.5, 1200);
+  scene.add(new T.HemisphereLight(0xffffff, 0xffb6dd, 0.95));
+  var sun = new T.DirectionalLight(0xffffff, 0.65);
+  sun.position.set(30, 60, 20);
+  scene.add(sun);
+
+  function mat(c) { return new T.MeshLambertMaterial({ color: c, transparent: true }); }
+
+  /* ---------------- build the course ---------------- */
+  var solids = [];     // every platform and pad
+  var pads = [];       // checkpoint pads by stage number
+  var coins = [];
+  var spinners = [];
+  var labels = [];
+  var totalZ = 0;
+
+  function makeBox(kind, cx, cz, size, color) {
+    var geo = new T.BoxGeometry(size, 1, size);
+    var mesh = new T.Mesh(geo, mat(color));
+    mesh.position.set(cx, -0.5, cz);
+    var edges = new T.LineSegments(new T.EdgesGeometry(geo), new T.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55 }));
+    mesh.add(edges);
+    scene.add(mesh);
+    var b = { kind: kind, mesh: mesh, cx: cx, cy: -0.5, cz: cz, hx: size / 2, hy: 0.5, hz: size / 2, active: true, dx: 0, dz: 0, fade: 'idle', fadeT: 0, stage: -1 };
+    solids.push(b);
+    return b;
+  }
+
+  function makeLabel(text) {
+    var c = document.createElement('canvas');
+    c.width = 512; c.height = 128;
+    var x = c.getContext('2d');
+    x.font = '600 66px Fredoka, "Trebuchet MS", sans-serif';
+    x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.lineJoin = 'round'; x.lineWidth = 14; x.strokeStyle = 'rgba(120,40,110,0.9)';
+    x.strokeText(text, 256, 66);
+    x.fillStyle = '#ffffff';
+    x.fillText(text, 256, 66);
+    var tex = new T.CanvasTexture(c);
+    var sp = new T.Sprite(new T.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false }));
+    sp.scale.set(16, 4, 1);
+    return sp;
+  }
+
+  function makeCoin(x, y, z, value) {
+    var geo = new T.CylinderGeometry(1.25, 1.25, 0.4, 24);
+    geo.rotateZ(Math.PI / 2);
+    var m = new T.MeshLambertMaterial({ color: 0xffd23c, emissive: 0x8a6200 });
+    var mesh = new T.Mesh(geo, m);
+    mesh.position.set(x, y, z);
+    scene.add(mesh);
+    coins.push({ mesh: mesh, x: x, y: y, z: z, value: value, taken: false, back: 0 });
+  }
+
+  function buildCourse() {
+    var z = 0;
+    for (var stage = 0; stage <= STAGES; stage++) {
+      var color = COLORS[stage % COLORS.length];
+      var pad = makeBox('pad', 0, z, PAD, color);
+      pad.stage = stage;
+      pads[stage] = pad;
+      var lab = makeLabel(stage === 0 ? 'START' : (stage === STAGES ? 'FINISH!' : 'Checkpoint ' + stage));
+      lab.position.set(0, 7, z);
+      scene.add(lab);
+      labels.push(lab);
+
+      if (stage === STAGES) {
+        // golden trophy as decoration at the far end of the finish pad
+        var gold = new T.MeshLambertMaterial({ color: 0xffd23c, emissive: 0x6a4a00 });
+        var cup = new T.Mesh(new T.CylinderGeometry(1.8, 1, 2.6, 20), gold);
+        cup.position.set(0, 3.2, z + 5.5);
+        var stem = new T.Mesh(new T.CylinderGeometry(0.35, 0.35, 1.8, 12), gold);
+        stem.position.set(0, 1.0, z + 5.5);
+        scene.add(cup); scene.add(stem);
+      }
+
+      var recipe = RECIPES[stage];
+      if (recipe) {
+        var cursor = z + PAD / 2 + GAP;
+        for (var j = 0; j < recipe.length; j++) {
+          var kind = recipe[j];
+          var size = kind === 'spin' ? SPIN : PLAT;
+          var zc = cursor + size / 2;
+          var xc = ((j + 1) % 2 === 0) ? 5 : -5;
+          if (kind === 'moving') xc = 0;
+          var p = makeBox(kind, xc, zc, size, color);
+          if (kind === 'moving') { p.cx = -7; p.mesh.position.x = -7; p.baseZ = zc; }
+          if (kind === 'spin') {
+            var bar = new T.Mesh(new T.BoxGeometry(size - 1, 1, 1), new T.MeshLambertMaterial({ color: 0xff5a78, emissive: 0x7a1030 }));
+            bar.position.set(xc, 1.0, zc);
+            scene.add(bar);
+            spinners.push({ mesh: bar, cx: xc, cy: 1.0, cz: zc, half: (size - 1) / 2 });
+          }
+          makeCoin(xc, 3.0, zc, stage + 1);
+          cursor += size + GAP;
+        }
+        z = cursor + PAD / 2;
+      }
+    }
+    totalZ = z;
+
+    // pink goo far below the course
+    var goo = new T.Mesh(new T.PlaneGeometry(900, totalZ + 900), new T.MeshBasicMaterial({ color: 0xff69b4, transparent: true, opacity: 0.7, fog: false }));
+    goo.rotation.x = -Math.PI / 2;
+    goo.position.set(0, -40, totalZ / 2);
+    scene.add(goo);
+
+    // far-off floating candies for atmosphere
+    var seed = 7;
+    function rnd() { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
+    for (var i = 0; i < 36; i++) {
+      var side = rnd() < 0.5 ? -1 : 1;
+      var geo = rnd() < 0.5 ? new T.SphereGeometry(2 + rnd() * 4, 16, 12) : new T.ConeGeometry(2 + rnd() * 3, 6 + rnd() * 5, 14);
+      var c = new T.Mesh(geo, mat(COLORS[Math.floor(rnd() * COLORS.length)]));
+      c.position.set(side * (45 + rnd() * 90), -20 + rnd() * 50, rnd() * totalZ);
+      scene.add(c);
+    }
+  }
+
+  /* ---------------- the player ---------------- */
+  function box(w, h, d, c) { return new T.Mesh(new T.BoxGeometry(w, h, d), new T.MeshLambertMaterial({ color: c })); }
+  var model = new T.Group();
+  var torso = box(2, 2, 1, 0xff8ac9); torso.position.y = 3; model.add(torso);
+  var head = box(1.2, 1.2, 1.2, 0xffe0c2); head.position.y = 4.6; model.add(head);
+  var eyeL = box(0.2, 0.28, 0.1, 0x3a1a40); eyeL.position.set(-0.28, 4.7, 0.62); model.add(eyeL);
+  var eyeR = box(0.2, 0.28, 0.1, 0x3a1a40); eyeR.position.set(0.28, 4.7, 0.62); model.add(eyeR);
+  function limb(x, y, w, color) {
+    var piv = new T.Group();
+    piv.position.set(x, y, 0);
+    var m = box(w, 2, w, color);
+    m.position.y = -1;
+    piv.add(m);
+    model.add(piv);
+    return piv;
+  }
+  var legL = limb(-0.5, 2, 0.95, 0x82dcff), legR = limb(0.5, 2, 0.95, 0x82dcff);
+  var armL = limb(-1.45, 4, 0.9, 0xff8ac9), armR = limb(1.45, 4, 0.9, 0xff8ac9);
+  scene.add(model);
+
+  var blob = new T.Mesh(new T.CircleGeometry(1.5, 20), new T.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.28, depthWrite: false, fog: false }));
+  blob.rotation.x = -Math.PI / 2;
+  scene.add(blob);
+
+  var p = { x: 0, y: 0, z: 0 };
+  var vx = 0, vy = 0, vz = 0;
+  var grounded = false, standing = null, coyote = 0, jumpBuf = 0;
+  var faceYaw = 0, phase = 0;
+  var dead = false, deathT = 0;
+  var finishResetT = -1;
+
+  /* ---------------- particles: trail and confetti ---------------- */
+  var trailPool = [];
+  for (var i = 0; i < 60; i++) {
+    var sp = new T.Sprite(new T.SpriteMaterial({ color: 0xffffff, transparent: true, depthWrite: false }));
+    sp.visible = false;
+    scene.add(sp);
+    trailPool.push({ s: sp, life: 0 });
+  }
+  var trailIdx = 0, trailTimer = 0, rainbowHue = 0;
+  function spawnTrail() {
+    var item = null;
+    SHOP.forEach(function (it) { if (it.id === save.trail) item = it; });
+    if (!item) return;
+    var e = trailPool[trailIdx];
+    trailIdx = (trailIdx + 1) % trailPool.length;
+    e.life = 0.8;
+    e.s.visible = true;
+    e.s.position.set(p.x, p.y + 2.6, p.z);
+    if (item.id === 'TrailRainbow') {
+      rainbowHue = (rainbowHue + 0.07) % 1;
+      e.s.material.color.setHSL(rainbowHue, 0.85, 0.65);
+    } else {
+      e.s.material.color.set(item.color);
+    }
+  }
+
+  var confetti = [];
+  for (var k = 0; k < 90; k++) {
+    var cm = new T.Mesh(new T.BoxGeometry(0.5, 0.5, 0.1), new T.MeshBasicMaterial({ color: COLORS[k % COLORS.length] }));
+    cm.visible = false;
+    scene.add(cm);
+    confetti.push({ m: cm, vx: 0, vy: 0, vz: 0, life: 0 });
+  }
+  function burstConfetti() {
+    var pad = pads[STAGES];
+    confetti.forEach(function (c) {
+      c.life = 2.6 + Math.random();
+      c.m.visible = true;
+      c.m.position.set(pad.cx + (Math.random() - 0.5) * 6, 3, pad.cz + (Math.random() - 0.5) * 6);
+      c.vx = (Math.random() - 0.5) * 30;
+      c.vy = 25 + Math.random() * 25;
+      c.vz = (Math.random() - 0.5) * 30;
+    });
+  }
+
+  /* ---------------- HUD, toast, shop ---------------- */
+  function hud() {
+    $('hStage').textContent = save.stage;
+    $('hCoins').textContent = save.coins;
+    $('hWins').textContent = save.wins;
+    $('shopCoins').textContent = save.coins;
+  }
+  var toastTimer = null;
+  function toast(msg) {
+    var t = $('toast');
+    t.textContent = msg;
+    t.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.hidden = true; }, 2800);
+  }
+
+  var paused = true;
+  function renderShop() {
+    var list = $('items');
+    list.innerHTML = '';
+    SHOP.forEach(function (it) {
+      var owned = !!save.owned[it.id];
+      var row = document.createElement('div');
+      row.className = 'item';
+      var sw = document.createElement('div'); sw.className = 'sw'; sw.style.background = it.color;
+      var mid = document.createElement('div');
+      var nm = document.createElement('b'); nm.textContent = it.name;
+      var ds = document.createElement('span'); ds.textContent = it.desc;
+      mid.appendChild(nm); mid.appendChild(ds);
+      var btn = document.createElement('button');
+      btn.type = 'button'; btn.className = 'buy';
+      if (owned && it.kind === 'Trail') {
+        if (save.trail === it.id) { btn.textContent = 'Unequip'; btn.className = 'buy off'; btn.onclick = function () { save.trail = ''; persist(); renderShop(); }; }
+        else { btn.textContent = 'Equip'; btn.className = 'buy equip'; btn.onclick = function () { save.trail = it.id; persist(); renderShop(); }; }
+      } else if (owned) {
+        btn.textContent = 'Owned'; btn.className = 'buy off';
+      } else {
+        btn.textContent = it.price + ' coins';
+        btn.onclick = function () {
+          if (save.coins < it.price) { toast('Not enough coins!'); return; }
+          save.coins -= it.price;
+          save.owned[it.id] = true;
+          if (it.kind === 'Trail') save.trail = it.id;
+          persist(); sfx.buy(); hud(); renderShop();
+          toast('You bought ' + it.name + '!');
+        };
+      }
+      row.appendChild(sw); row.appendChild(mid); row.appendChild(btn);
+      list.appendChild(row);
+    });
+    $('shopCoins').textContent = save.coins;
+  }
+  var started = false;
+  function openShop() { if (!started) return; renderShop(); $('shop').hidden = false; paused = true; }
+  function closeShop() { $('shop').hidden = true; paused = false; app.focus(); }
+  $('bShop').onclick = function () { ensureAudio(); if ($('shop').hidden) openShop(); else closeShop(); };
+  $('bClose').onclick = closeShop;
+  $('bReset').onclick = function () { if (started) respawn(); app.focus(); };
+  $('bSound').onclick = function () { soundOn = !soundOn; $('bSound').textContent = soundOn ? 'Sound on' : 'Sound off'; ensureAudio(); app.focus(); };
+  $('bPlay').onclick = function () {
+    ensureAudio();
+    started = true; paused = false;
+    $('start').hidden = true;
+    app.focus();
+    setTimeout(function () { $('hint').hidden = true; }, 9000);
+  };
+
+  /* ---------------- game events ---------------- */
+  function spawnAt(stage) {
+    var pad = pads[stage];
+    p.x = pad.cx; p.z = pad.cz; p.y = 0.02;
+    vx = vy = vz = 0;
+    standing = null; grounded = false;
+    faceYaw = 0;
+  }
+  function respawn() {
+    dead = false;
+    spawnAt(save.stage);
+  }
+  function die() {
+    if (dead) return;
+    dead = true; deathT = 0.7;
+    sfx.die();
+    var f = $('flash');
+    f.classList.add('on');
+    requestAnimationFrame(function () { requestAnimationFrame(function () { f.classList.remove('on'); }); });
+  }
+  function reachStage(n) {
+    save.stage = n;
+    if (n === STAGES) {
+      save.wins += 1;
+      save.coins += FINISH_REWARD;
+      burstConfetti();
+      sfx.win();
+      toast('You finished the Candy Course! +' + FINISH_REWARD + ' coins');
+      finishResetT = 6;
+    } else {
+      sfx.check();
+      toast('Checkpoint ' + n + ' reached!');
+    }
+    persist(); hud();
+  }
+
+  /* ---------------- input ---------------- */
+  var keys = {};
+  var jumpHeld = false;
+  var yaw = Math.PI, pitch = 0.5, dist = 24;
+  var joy = { x: 0, y: 0 };
+
+  window.addEventListener('keydown', function (e) {
+    if (e.code === 'Escape' && !$('shop').hidden) { closeShop(); return; }
+    var game = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'];
+    if (game.indexOf(e.code) !== -1 && started && $('shop').hidden) e.preventDefault();
+    if (e.code === 'Space' && !e.repeat) jumpBuf = 0.12;
+    if (e.code === 'KeyR' && started && $('shop').hidden) respawn();
+    keys[e.code] = true;
+    ensureAudio();
+  });
+  window.addEventListener('keyup', function (e) { keys[e.code] = false; });
+  window.addEventListener('blur', function () { keys = {}; jumpHeld = false; });
+
+  // look around: drag on the 3D view (mouse or touch)
+  var look = null;
+  canvas.addEventListener('pointerdown', function (e) {
+    app.focus();
+    ensureAudio();
+    if (look === null) { look = { id: e.pointerId, x: e.clientX, y: e.clientY }; canvas.setPointerCapture(e.pointerId); }
+  });
+  canvas.addEventListener('pointermove', function (e) {
+    if (look && look.id === e.pointerId) {
+      yaw -= (e.clientX - look.x) * 0.006;
+      pitch = Math.max(0.12, Math.min(1.25, pitch + (e.clientY - look.y) * 0.005));
+      look.x = e.clientX; look.y = e.clientY;
+    }
+  });
+  function endLook(e) { if (look && look.id === e.pointerId) look = null; }
+  canvas.addEventListener('pointerup', endLook);
+  canvas.addEventListener('pointercancel', endLook);
+  canvas.addEventListener('wheel', function (e) { dist = Math.max(14, Math.min(40, dist + e.deltaY * 0.02)); e.preventDefault(); }, { passive: false });
+
+  // touch controls
+  var isTouch = (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) || ('ontouchstart' in window);
+  if (isTouch) {
+    $('joyZone').hidden = false;
+    $('jumpBtn').hidden = false;
+    $('hint').textContent = 'Left thumb moves · right thumb looks · JUMP to jump';
+    var jz = $('joyZone'), jb = $('joyBase'), jk = $('joyKnob');
+    var joyId = null, jcx = 0, jcy = 0;
+    jz.addEventListener('pointerdown', function (e) {
+      if (joyId !== null) return;
+      joyId = e.pointerId; jz.setPointerCapture(e.pointerId);
+      var r = jz.getBoundingClientRect();
+      jcx = e.clientX; jcy = e.clientY;
+      jb.hidden = false;
+      jb.style.left = (jcx - r.left) + 'px';
+      jb.style.top = (jcy - r.top) + 'px';
+      jk.style.transform = 'translate(0,0)';
+      ensureAudio();
+    });
+    jz.addEventListener('pointermove', function (e) {
+      if (e.pointerId !== joyId) return;
+      var dx = e.clientX - jcx, dy = e.clientY - jcy;
+      var len = Math.hypot(dx, dy), max = 50;
+      if (len > max) { dx = dx / len * max; dy = dy / len * max; }
+      jk.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+      joy.x = dx / max; joy.y = dy / max;
+      if (Math.hypot(joy.x, joy.y) < 0.15) { joy.x = 0; joy.y = 0; }
+    });
+    function endJoy(e) { if (e.pointerId !== joyId) return; joyId = null; joy.x = 0; joy.y = 0; jb.hidden = true; }
+    jz.addEventListener('pointerup', endJoy);
+    jz.addEventListener('pointercancel', endJoy);
+    $('jumpBtn').addEventListener('pointerdown', function (e) { e.preventDefault(); jumpHeld = true; jumpBuf = 0.12; ensureAudio(); });
+    var upJump = function () { jumpHeld = false; };
+    $('jumpBtn').addEventListener('pointerup', upJump);
+    $('jumpBtn').addEventListener('pointercancel', upJump);
+    $('jumpBtn').addEventListener('pointerleave', upJump);
+  }
+
+  /* ---------------- physics ---------------- */
+  function overlaps(b) {
+    return p.x + PW > b.cx - b.hx + EPS && p.x - PW < b.cx + b.hx - EPS &&
+           p.z + PW > b.cz - b.hz + EPS && p.z - PW < b.cz + b.hz - EPS &&
+           p.y + PH > b.cy - b.hy + EPS && p.y < b.cy + b.hy - EPS;
+  }
+
+  function physics(h, tx, tz, speedScale) {
+    var k = 1 - Math.exp(-18 * h);
+    vx += (tx - vx) * k;
+    vz += (tz - vz) * k;
+
+    if ((jumpHeld || keys.Space || jumpBuf > 0) && (grounded || coyote > 0)) {
+      vy = JUMP; grounded = false; coyote = 0; jumpBuf = 0;
+      sfx.jump();
+    }
+    vy -= GRAV * h;
+    if (vy < -200) vy = -200;
+
+    var i, b;
+    p.x += vx * h;
+    for (i = 0; i < solids.length; i++) {
+      b = solids[i];
+      if (b.active && overlaps(b)) {
+        if (vx > 0) p.x = b.cx - b.hx - PW;
+        else if (vx < 0) p.x = b.cx + b.hx + PW;
+        else p.x = p.x < b.cx ? b.cx - b.hx - PW : b.cx + b.hx + PW;
+        vx = 0;
+      }
+    }
+    p.z += vz * h;
+    for (i = 0; i < solids.length; i++) {
+      b = solids[i];
+      if (b.active && overlaps(b)) {
+        if (vz > 0) p.z = b.cz - b.hz - PW;
+        else if (vz < 0) p.z = b.cz + b.hz + PW;
+        else p.z = p.z < b.cz ? b.cz - b.hz - PW : b.cz + b.hz + PW;
+        vz = 0;
+      }
+    }
+    p.y += vy * h;
+    grounded = false; standing = null;
+    for (i = 0; i < solids.length; i++) {
+      b = solids[i];
+      if (b.active && overlaps(b)) {
+        if (vy <= 0) { p.y = b.cy + b.hy; vy = 0; grounded = true; standing = b; }
+        else { p.y = b.cy - b.hy - PH; vy = 0; }
+      }
+    }
+  }
+
+  function groundBelow() {
+    var best = -Infinity;
+    for (var i = 0; i < solids.length; i++) {
+      var b = solids[i];
+      if (!b.active) continue;
+      if (Math.abs(p.x - b.cx) < b.hx && Math.abs(p.z - b.cz) < b.hz) {
+        var top = b.cy + b.hy;
+        if (top <= p.y + 0.6 && top > best) best = top;
+      }
+    }
+    return best;
+  }
+
+  /* ---------------- main loop ---------------- */
+  var tm = 0;
+  var last = performance.now();
+  var camPos = new T.Vector3();
+  var camInit = false;
+
+  function frame(now) {
+    requestAnimationFrame(frame);
+    var dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+
+    if (!paused) update(dt);
+    spinAndAnimate(dt);
+    drawCamera(dt);
+    renderer.render(scene, camera);
+  }
+
+  function update(dt) {
+    tm += dt;
+    var i, b;
+
+    // platforms: moving ones slide, fading ones count down
+    for (i = 0; i < solids.length; i++) {
+      b = solids[i];
+      b.dx = 0; b.dz = 0;
+      if (b.kind === 'moving') {
+        var nx = -7 * Math.cos(Math.PI * tm / 2.5);
+        b.dx = nx - b.cx;
+        b.cx = nx;
+        b.mesh.position.x = nx;
+      } else if (b.kind === 'fade') {
+        if (b.fade === 'warn') {
+          b.fadeT -= dt;
+          if (b.fadeT <= 0) { b.fade = 'gone'; b.fadeT = 2.5; b.active = false; b.mesh.visible = false; }
+        } else if (b.fade === 'gone') {
+          b.fadeT -= dt;
+          if (b.fadeT <= 0) { b.fade = 'idle'; b.active = true; b.mesh.visible = true; b.mesh.material.opacity = 1; }
+        }
+      }
+    }
+
+    if (dead) {
+      deathT -= dt;
+      if (deathT <= 0) respawn();
+      return;
+    }
+
+    // ride a moving platform
+    if (standing && standing.active) { p.x += standing.dx; p.z += standing.dz; }
+
+    // movement direction relative to the camera
+    var ix = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0);
+    var iz = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0);
+    ix += joy.x; iz += -joy.y;
+    var mag = Math.hypot(ix, iz);
+    if (mag > 1) { ix /= mag; iz /= mag; mag = 1; }
+    var fx = -Math.sin(yaw), fz = -Math.cos(yaw);
+    var rx = Math.cos(yaw), rz = -Math.sin(yaw);
+    var speed = save.owned.SpeedyShoes ? 20 : WALK;
+    var tx = (fx * iz + rx * ix) * speed;
+    var tz = (fz * iz + rz * ix) * speed;
+    if (mag > 0.1) {
+      var target = Math.atan2(tx, tz);
+      var diff = Math.atan2(Math.sin(target - faceYaw), Math.cos(target - faceYaw));
+      faceYaw += diff * Math.min(1, dt * 14);
+    }
+
+    var n = Math.max(1, Math.ceil(dt / (1 / 120)));
+    var h = dt / n;
+    for (i = 0; i < n; i++) physics(h, tx, tz);
+
+    if (grounded) coyote = 0.1; else coyote = Math.max(0, coyote - dt);
+    jumpBuf = Math.max(0, jumpBuf - dt);
+
+    // what are we standing on?
+    if (standing) {
+      if (standing.kind === 'fade' && standing.fade === 'idle') {
+        standing.fade = 'warn'; standing.fadeT = 0.6; standing.mesh.material.opacity = 0.5;
+      }
+      if (standing.kind === 'pad' && standing.stage === save.stage + 1) reachStage(standing.stage);
+    }
+
+    // coins
+    for (i = 0; i < coins.length; i++) {
+      var c = coins[i];
+      if (c.taken) {
+        c.back -= dt;
+        if (c.back <= 0) { c.taken = false; c.mesh.visible = true; }
+        continue;
+      }
+      if (Math.hypot(p.x - c.x, p.z - c.z) < 3 && Math.abs(p.y + 2.5 - c.y) < 4) {
+        c.taken = true; c.back = COIN_RESPAWN; c.mesh.visible = false;
+        save.coins += c.value;
+        sfx.coin(); persist(); hud();
+      }
+    }
+
+    // spinning bars
+    var a = tm * 2;
+    var ca = Math.cos(a), sa = Math.sin(a);
+    for (i = 0; i < spinners.length; i++) {
+      var s = spinners[i];
+      var dx = p.x - s.cx, dz = p.z - s.cz;
+      var lx = ca * dx - sa * dz;
+      var lz = sa * dx + ca * dz;
+      if (Math.abs(lx) < s.half + PW && Math.abs(lz) < 0.5 + PW && p.y + PH > s.cy - 0.5 && p.y < s.cy + 0.5) die();
+    }
+
+    // the goo
+    if (p.y < KILL_Y) die();
+
+    // after finishing, go back to the start for another run
+    if (finishResetT > 0) {
+      finishResetT -= dt;
+      if (finishResetT <= 0 && save.stage === STAGES) {
+        save.stage = 0; persist(); hud();
+        spawnAt(0);
+      }
+    }
+
+    // trail
+    trailTimer -= dt;
+    if (save.trail && trailTimer <= 0 && (Math.hypot(vx, vz) > 1 || !grounded)) {
+      spawnTrail();
+      trailTimer = 0.04;
+    }
+  }
+
+  function spinAndAnimate(dt) {
+    var i;
+    var t = tm;
+    for (i = 0; i < coins.length; i++) coins[i].mesh.rotation.y = t * 3 + i;
+    for (i = 0; i < spinners.length; i++) spinners[i].mesh.rotation.y = t * 2;
+
+    // fading platform look
+    for (i = 0; i < solids.length; i++) {
+      var b = solids[i];
+      if (b.kind === 'fade' && b.fade === 'warn') b.mesh.material.opacity = 0.35 + 0.15 * Math.sin(tm * 40);
+    }
+
+    // character
+    model.visible = !dead;
+    model.position.set(p.x, p.y, p.z);
+    model.rotation.y = faceYaw;
+    var sp = Math.hypot(vx, vz);
+    if (grounded && sp > 1) {
+      phase += dt * sp * 0.5;
+      var sw = Math.sin(phase) * 0.9 * Math.min(1, sp / 16);
+      legL.rotation.x = sw; legR.rotation.x = -sw;
+      armL.rotation.x = -sw; armR.rotation.x = sw;
+    } else if (!grounded) {
+      legL.rotation.x = 0.35; legR.rotation.x = -0.35;
+      armL.rotation.x = -2.6; armR.rotation.x = -2.6;
+    } else {
+      legL.rotation.x *= 0.8; legR.rotation.x *= 0.8; armL.rotation.x *= 0.8; armR.rotation.x *= 0.8;
+    }
+
+    // blob shadow
+    var gy = dead ? -Infinity : groundBelow();
+    if (gy === -Infinity) blob.visible = false;
+    else { blob.visible = true; blob.position.set(p.x, gy + 0.03, p.z); var sc = Math.max(0.4, 1 - (p.y - gy) / 30); blob.scale.set(sc, sc, sc); }
+
+    // trail and confetti particles
+    for (i = 0; i < trailPool.length; i++) {
+      var e = trailPool[i];
+      if (e.life > 0) {
+        e.life -= dt;
+        if (e.life <= 0) e.s.visible = false;
+        else { var f = e.life / 0.8; e.s.material.opacity = f * 0.9; e.s.scale.set(0.2 + f * 1.6, 0.2 + f * 1.6, 1); }
+      }
+    }
+    for (i = 0; i < confetti.length; i++) {
+      var c = confetti[i];
+      if (c.life > 0) {
+        c.life -= dt;
+        c.vy -= 40 * dt;
+        c.m.position.x += c.vx * dt; c.m.position.y += c.vy * dt; c.m.position.z += c.vz * dt;
+        c.m.rotation.x += dt * 8; c.m.rotation.z += dt * 6;
+        if (c.life <= 0) c.m.visible = false;
+      }
+    }
+  }
+
+  function drawCamera(dt) {
+    var tx = p.x, ty = p.y + 3.2, tz = p.z;
+    var cp = Math.cos(pitch);
+    var wx = tx + Math.sin(yaw) * cp * dist;
+    var wy = ty + Math.sin(pitch) * dist;
+    var wz = tz + Math.cos(yaw) * cp * dist;
+    if (!camInit) { camPos.set(wx, wy, wz); camInit = true; }
+    var k = 1 - Math.exp(-12 * dt);
+    camPos.x += (wx - camPos.x) * k;
+    camPos.y += (wy - camPos.y) * k;
+    camPos.z += (wz - camPos.z) * k;
+    camera.position.copy(camPos);
+    camera.lookAt(tx, ty, tz);
+  }
+
+  /* ---------------- sizing and start ---------------- */
+  function resize() {
+    var w = app.clientWidth || 800, h = app.clientHeight || 600;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.fov = w / h < 0.8 ? 72 : 60;
+    camera.updateProjectionMatrix();
+  }
+  window.addEventListener('resize', resize);
+  if (window.ResizeObserver) new ResizeObserver(resize).observe(app);
+
+  function init() {
+    buildCourse();
+    spawnAt(save.stage);
+    hud();
+    resize();
+    camInit = false;
+    drawCamera(1);
+    $('loading').hidden = true;
+    $('start').hidden = false;
+    renderShop();
+    requestAnimationFrame(function (t) { last = t; frame(t); });
+  }
+
+  // wait briefly for the display font so the pad signs draw with it
+  var fontReady = (document.fonts && document.fonts.load) ? document.fonts.load('600 66px Fredoka') : Promise.resolve();
+  Promise.race([fontReady, new Promise(function (r) { setTimeout(r, 1500); })]).catch(function () {}).then(init);
+})();
+</script>
+
+</body></html>
